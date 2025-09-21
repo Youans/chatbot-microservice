@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: chatbot-service-test
+
+app:
+  persistence: memory
+  llm-provider: dummy
+  llm-model: dummy-model
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

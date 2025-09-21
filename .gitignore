@@ -1,0 +1,5 @@
+/chatbot-service/target/
+/infra/terraform/.terraform/
+/chatbot-service/target/
+/gateway-service/target/
+/.idea/

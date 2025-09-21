@@ -1,0 +1,62 @@
+server:
+  port: 0
+
+security:
+  permitAllApi: false
+
+app:
+  security:
+    jwt:
+      secret: test-secret-should-be-at-least-32-characters-long-123456
+      issuer: http://test.local
+      audience: chatbot
+
+spring:
+  application:
+    name: gateway-service-test
+  cloud:
+    gateway:
+      routes:
+        - id: chat-send
+          uri: http://localhost:8080
+          predicates:
+            - Path=/api/chat/message
+            - Method=POST
+          filters:
+            - StripPrefix=1
+        - id: chat-session
+          uri: http://localhost:8080
+          predicates:
+            - Path=/api/chat/session
+            - Method=POST
+          filters:
+            - StripPrefix=1
+        - id: chat-history
+          uri: http://localhost:8080
+          predicates:
+            - Path=/api/chat/history/**
+            - Method=GET
+          filters:
+            - StripPrefix=1
+        - id: chatbot-service
+          uri: http://localhost:8080
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=1
+  redis:
+    host: localhost
+    port: 6379
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  health:
+    redis:
+      enabled: false

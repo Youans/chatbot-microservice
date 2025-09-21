@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  chatbot:
+    build:
+      context: ./chatbot-service
+    image: pidima/chatbot-service:dev
+    container_name: chatbot
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m
+      # Persistence config: memory (default) or dynamodb
+      - APP_PERSISTENCE=${APP_PERSISTENCE:-dynamodb}
+      # DynamoDB Local (optional)
+      - DYNAMODB_ENDPOINT=http://dynamodb-local:8000
+      - AWS_REGION=eu-central-1
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      # LLM config
+      - APP_LLM_PROVIDER=${APP_LLM_PROVIDER:-dummy}
+      - APP_LLM_MODEL=${APP_LLM_MODEL:-dummy-model}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    ports:
+      - "18080:8080"
+    depends_on:
+      - dynamodb-local
+
+  gateway:
+    build:
+      context: ./gateway-service
+    image: pidima/gateway-service:dev
+    container_name: gateway
+    environment:
+      - JAVA_OPTS=-Xms256m -Xmx512m
+      - CHATBOT_BASE_URL=http://chatbot:8080
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      # JWT settings
+      - GATEWAY_JWT_SECRET=${GATEWAY_JWT_SECRET:-dev-secret}
+      - GATEWAY_JWT_ISSUER=${GATEWAY_JWT_ISSUER:-http://pidima.local}
+      - GATEWAY_JWT_AUDIENCE=${GATEWAY_JWT_AUDIENCE:-chatbot}
+    ports:
+      - "18081:8081"
+    depends_on:
+      - chatbot
+      - redis
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:1.22.0
+    container_name: dynamodb-local
+    command: -jar DynamoDBLocal.jar -inMemory -sharedDb
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/shell/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "no"]
+    restart: unless-stopped
+
+  ui:
+    image: nginx:1.27-alpine
+    container_name: chatbot-ui
+    volumes:
+      - ./ui-app:/usr/share/nginx/html:ro
+    ports:
+      - "18082:80"
+    depends_on:
+      - gateway

@@ -1,0 +1,111 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: gateway-service
+  cloud:
+    gateway:
+      globalcors:
+        add-to-simple-url-handler-mapping: true
+        corsConfigurations:
+          "[/**]":
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: false
+      filter:
+        request-rate-limiter:
+          deny-empty-key: true
+      routes:
+        # Strict limit: send message
+        - id: chat-send
+          uri: ${CHATBOT_BASE_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/chat/message
+            - Method=POST
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@principalNameKeyResolver}"
+                redis-rate-limiter.replenishRate: 3
+                redis-rate-limiter.burstCapacity: 3
+                redis-rate-limiter.requestedTokens: 1
+                redis-rate-limiter.includeHeaders: true
+
+        # Moderate limit: create session
+        - id: chat-session
+          uri: ${CHATBOT_BASE_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/chat/session
+            - Method=POST
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@principalNameKeyResolver}"
+                redis-rate-limiter.replenishRate: 2
+                redis-rate-limiter.burstCapacity: 2
+                redis-rate-limiter.requestedTokens: 1
+                redis-rate-limiter.includeHeaders: true
+
+        # Looser limit: history reads
+        - id: chat-history
+          uri: ${CHATBOT_BASE_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/chat/history/**
+            - Method=GET
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@principalNameKeyResolver}"
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                redis-rate-limiter.requestedTokens: 1
+                redis-rate-limiter.includeHeaders: true
+
+        # Fallback for other /api/** calls
+        - id: chatbot-service
+          uri: ${CHATBOT_BASE_URL:http://localhost:8080}
+          predicates:
+            - Path=/api/**
+          filters:
+            - StripPrefix=1
+            - name: RequestRateLimiter
+              args:
+                key-resolver: "#{@principalNameKeyResolver}"
+                redis-rate-limiter.replenishRate: 10     # tokens per second
+                redis-rate-limiter.burstCapacity: 20     # bucket size
+                redis-rate-limiter.requestedTokens: 1
+                redis-rate-limiter.includeHeaders: true
+  redis:
+    host: ${REDIS_HOST:redis}
+    port: ${REDIS_PORT:6379}
+    timeout: 2000
+  data:
+    redis:
+      repositories:
+        enabled: false
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  security:
+    jwt:
+      secret: ${GATEWAY_JWT_SECRET:dev-secret}
+      issuer: ${GATEWAY_JWT_ISSUER:http://pidima.local}
+      audience: ${GATEWAY_JWT_AUDIENCE:chatbot}
+
+logging:
+  level:
+    org.springframework.cloud.gateway.filter.ratelimit: DEBUG

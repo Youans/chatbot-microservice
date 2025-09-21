@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pidima Chatbot UI</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Pidima Chatbot</h1>
+      <p>Gateway: <code id="gatewayUrl"></code></p>
+    </header>
+
+    <section class="auth">
+      <div class="row" style="grid-template-columns: 1fr auto auto;">
+        <div>
+          <label>Session ID</label>
+          <input id="sessionId" placeholder="Session ID will appear here" />
+        </div>
+        <button id="createSessionBtn">New Session</button>
+        <button id="logoutBtn" style="background:#ef4444">Logout</button>
+      </div>
+      <div class="row" style="grid-template-columns: 1fr 1fr; margin-top:12px;">
+        <div>
+          <label>Signed-in User</label>
+          <div id="userInfo" class="user-info">sub: -, exp: -</div>
+        </div>
+        <div>
+          <label>Service Health</label>
+          <div>
+            <button id="healthBtn">Check /health</button>
+            <span id="healthStatus" class="status"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chat">
+      <h2>Chat</h2>
+      <div id="chatWindow" class="chat-window"></div>
+      <div class="row">
+        <input id="messageInput" placeholder="Type your message..." />
+        <button id="sendBtn">Send</button>
+        <button id="refreshBtn">Refresh History</button>
+      </div>
+    </section>
+
+    <section class="api">
+      <h2>API Explorer</h2>
+      <div class="grid-two">
+        <div class="card">
+          <h3>POST /api/chat/session</h3>
+          <label>User ID (optional)</label>
+          <input id="apiUserId" placeholder="user-123" />
+          <button id="apiCreateSessionBtn">Create Session</button>
+        </div>
+        <div class="card">
+          <h3>POST /api/chat/message</h3>
+          <label>Session ID</label>
+          <input id="apiSessionIdSend" placeholder="session id" />
+          <label>Message</label>
+          <input id="apiMessage" placeholder="Hello!" />
+          <button id="apiSendMessageBtn">Send Message</button>
+        </div>
+        <div class="card">
+          <h3>GET /api/chat/history/{sessionId}</h3>
+          <label>Session ID</label>
+          <input id="apiSessionIdHistory" placeholder="session id" />
+          <button id="apiGetHistoryBtn">Get History</button>
+        </div>
+        <div class="card">
+          <h3>GET /health</h3>
+          <button id="apiHealthBtn">Check Health</button>
+        </div>
+      </div>
+      <h3>Raw Response</h3>
+      <pre id="apiOutput" class="api-output"></pre>
+    </section>
+
+    <footer>
+      <small>Docs: <a id="swaggerLink" target="_blank">Swagger UI</a> · <a href="/login.html">Login</a></small>
+    </footer>
+  </div>
+  <script src="/script.js"></script>
+</body>
+</html>
