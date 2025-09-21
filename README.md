@@ -53,36 +53,80 @@ See detailed API docs in `docs/API.md`.
 
 ## Local Development
 
-### 1) Build services
+### 1) Quickstart with Docker Compose
+
+You don't need to pre-build JARs; Compose will build images from the service folders.
+
+```bash
+# Optional: create a local .env (values have safe defaults if omitted)
+cat > .env << 'EOF'
+# Gateway JWT
+GATEWAY_JWT_SECRET=dev-secret-please-change
+GATEWAY_JWT_ISSUER=http://pidima.local
+GATEWAY_JWT_AUDIENCE=chatbot
+
+# Chatbot persistence and LLM
+APP_PERSISTENCE=dynamodb   # or memory
+APP_LLM_PROVIDER=dummy     # or openai
+APP_LLM_MODEL=dummy-model
+OPENAI_API_KEY=
+EOF
+
+# Start full stack (gateway, chatbot, Redis, DynamoDB Local, UI)
+docker compose --env-file .env up -d --build
+
+# Tail logs
+docker compose logs -f
+```
+
+Services & URLs:
+
+- Gateway: http://localhost:18081
+- UI: http://localhost:18082/login.html?gateway=http://localhost:18081
+- Chatbot (direct): http://localhost:18080
+- DynamoDB Local: http://localhost:8000 (in-memory)
+- Redis: localhost:6379
+
+Stop everything:
+
+```bash
+docker compose down
+```
+
+Clean all containers, networks, and anonymous volumes:
+
+```bash
+docker compose down -v --remove-orphans
+```
+
+### 2) Development build (optional)
+
+If you want faster rebuild loops, you can pre-build JARs locally:
 
 ```bash
 mvn -f gateway-service/pom.xml clean package -DskipTests
 mvn -f chatbot-service/pom.xml clean package -DskipTests
+docker compose up -d --build
 ```
 
-### 2) Run via Docker Compose
-
-```bash
-docker compose --env-file .env up -d --build
-```
-
-- Gateway: http://localhost:18081
-- UI: http://localhost:18082/login.html?gateway=http://localhost:18081
-
-### 3) Login (dev credentials)
+### 3) Dev login
 
 - Username: `admin`
 - Password: `admin`
 
-### 4) Use the UI
+### 4) Using the UI
 
-- Create session, send message, refresh history
-- Health button calls `GET {gateway}/health`
+- Open UI URL above and log in
+- Create session, send message, view history
+- "Health" button calls `GET {gateway}/health`
 
 ### 5) Troubleshooting
 
-- If `401` occurs on `/api/**`, ensure the UI has an access token in `localStorage` and that `/auth/refresh` is reachable with cookies.
-- Confirm CORS allows `http://localhost:18082` and `credentials: include` is used for refresh/logout.
+- Authentication (401): ensure the UI has a valid access token in `localStorage`. The UI will auto-refresh access tokens via `POST /auth/refresh` (credentials included). Make sure cookies are allowed in the browser for the gateway host.
+- CORS: In local mode, CORS headers are permissive. The UI only sends credentialed requests for `/auth/*`.
+- Redis (rate limiting): The gateway uses Redis (container `redis`) for rate limiting. Ensure port 6379 is free and the container is healthy.
+- DynamoDB Local: Chatbot defaults to `APP_PERSISTENCE=dynamodb` and auto-creates the `chat_messages` table when a local endpoint is configured. Data is ephemeral (in-memory). Set `APP_PERSISTENCE=memory` to avoid DynamoDB entirely.
+- Ports in use: If any `18080/18081/18082/8000/6379` ports are occupied, stop the conflicting processes or change port mappings in `docker-compose.yml`.
 
 ---
 
@@ -174,10 +218,29 @@ ECS services will pull `latest` and start tasks behind the ALB.
 
 - `gateway-service` uses `SecurityConfig` to:
   - Permit `/health`, `/actuator/**`, `/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, and OPTIONS
-  - Require auth for `/api/**`
+  - Require auth for `/api/**` (toggleable for tests via `security.permitAllApi` property)
   - Validate JWT (HS256 secret, issuer, audience from properties)
   - Map `roles` claim to authorities (prefix `ROLE_`)
-- `chatbot-service` has pluggable persistence and LLM provider via properties/env
+- `chatbot-service` has pluggable persistence and LLM provider via properties/env. When `APP_PERSISTENCE=dynamodb` and a local endpoint is configured, the service uses static local credentials and auto-creates the chat table on startup.
+
+### Environment variables (docker compose)
+
+Gateway:
+
+- `GATEWAY_JWT_SECRET` (required in prod; defaults for dev)
+- `GATEWAY_JWT_ISSUER`
+- `GATEWAY_JWT_AUDIENCE`
+- `CHATBOT_BASE_URL` (wired to `http://chatbot:8080` in compose)
+
+Chatbot:
+
+- `APP_PERSISTENCE` = `dynamodb` (default) or `memory`
+- `DYNAMODB_ENDPOINT` = `http://dynamodb-local:8000` (compose default)
+- `AWS_REGION` = `eu-central-1` (compose default)
+- `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` = `test`/`test` for local DynamoDB
+- `APP_LLM_PROVIDER` = `dummy` (default) or `openai`
+- `APP_LLM_MODEL` = `dummy-model` by default
+- `OPENAI_API_KEY` when using `openai`
 
 ---
 
@@ -188,7 +251,13 @@ See `docs/API.md` for complete request/response examples.
 - Auth: `/auth/login`, `/auth/refresh`, `/auth/logout`
 - Health: `/health`
 - User info: `/me` (secured)
-- Chat: `/api/chat/session`, `/api/chat/message`, `/api/chat/history/{sessionId}`
+- Chat (proxied via gateway): `/api/chat/session`, `/api/chat/message`, `/api/chat/history/{sessionId}`
+
+Direct chatbot (bypassing gateway, for debugging only):
+
+- `POST http://localhost:18080/chat/session`
+- `POST http://localhost:18080/chat/message`
+- `GET  http://localhost:18080/chat/history/{sessionId}`
 
 ---
 
